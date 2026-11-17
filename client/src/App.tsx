@@ -1,0 +1,133 @@
+import { isAdminRole } from './constants';
+import { useState, useEffect } from 'react';
+import './index.css';
+import { Navbar } from './components/Navbar';
+import { DashboardPage } from './pages/DashboardPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
+import { LoginPage } from './pages/LoginPage';
+
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { WeekendScreen } from './components/WeekendScreen';
+import { ToastContainer } from './components/Toast';
+import { AuthGuard } from './components/AuthGuard';
+import { useAuthStore } from './store/useAuthStore';
+import { useParkingStore } from './store/useParkingStore';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { useAppStore } from './store/useAppStore';
+import { ProfilePage } from './pages/ProfilePage';
+import { isSpecialUser } from './components/ParkingSpace';
+import { api } from './services/api';
+import { getNativeFcmToken, isNativeAndroidApp } from './utils/nativeApp';
+
+type AuthView = 'login' | 'forgot-password';
+
+function AppContent() {
+  const { role, user, isAuthenticated } = useAuthStore();
+  const { isWeekend, fetchStatus } = useParkingStore();
+  const { currentView, specialView } = useAppStore();
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const register = () => {
+      const token = getNativeFcmToken();
+      if (!token) return;
+      api.devices
+        .register(token, isNativeAndroidApp() ? 'android' : 'web')
+        .catch(() => {});
+    };
+
+    register();
+    window.addEventListener('fcm-token', register);
+    return () => window.removeEventListener('fcm-token', register);
+  }, [isAuthenticated]);
+
+  if (currentView === 'profile') {
+    return <ProfilePage />;
+  }
+
+  // Special users from HR department get access to both dashboards
+  if (isSpecialUser(user?.name)) {
+    if (specialView === 'hr') {
+      return <AdminDashboardPage />;
+    } else {
+      if (isWeekend) {
+        return <WeekendScreen />;
+      }
+      return <DashboardPage />;
+    }
+  }
+
+  if (isAdminRole(role)) {
+    return <AdminDashboardPage />;
+  }
+
+  if (isWeekend) {
+    return <WeekendScreen />;
+  }
+
+  return <DashboardPage />;
+}
+
+function App() {
+  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const [authView, setAuthView] = useState<AuthView>('login');
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    const handleNavigate = (view: AuthView) => {
+      setAuthView(view);
+    };
+
+    return (
+      <>
+        {authView === 'login' && <LoginPage onNavigate={handleNavigate} />}
+        {authView === 'forgot-password' && <ForgotPasswordPage onNavigate={handleNavigate} />}
+        <ToastContainer />
+      </>
+    );
+  }
+
+  return (
+    <AuthGuard>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: '#F8F9FA' }}>
+        <Navbar />
+
+        <AppContent />
+
+        {/* Footer */}
+        <footer
+          style={{
+            borderTop: '1px solid #E4E7EC',
+            background: '#FFFFFF',
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 'auto',
+          }}
+        >
+          <p style={{ fontSize: '12px', color: '#9CA3AF' }}>
+            Quadrant Parking System · Internal Use Only
+          </p>
+        </footer>
+
+        <ToastContainer />
+        <ChangePasswordModal />
+      </div>
+    </AuthGuard>
+  );
+}
+
+export default App;

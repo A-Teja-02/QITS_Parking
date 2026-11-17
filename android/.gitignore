@@ -1,0 +1,14 @@
+/.gradle/
+/build/
+/app/build/
+/local.properties
+/keystore.properties
+*.iml
+.idea/
+.DS_Store
+/captures/
+google-services.json
+hs_err_pid*.log
+*.hprof
+.kotlin/
+/app/release/
